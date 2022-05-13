@@ -6,7 +6,7 @@ import type { Strategy } from "../../src/types/Strategy";
 import { Signers } from "../types";
 import { shouldInvest } from "./Strategy.behavior";
 
-import { USDT, aUSDT, apwToken, aave, apwineController, apwineFuture, apwineAmm, pairId } from "../common";
+import { USDT, aavePool, aaveDataProvider, apwineController, apwineFuture, apwineAmm, pairId } from "../common";
 
 describe("Unit tests", function () {
   before(async function () {
@@ -21,12 +21,12 @@ describe("Unit tests", function () {
     beforeEach(async function () {
       const strategyArtifact: Artifact = await artifacts.readArtifact("Strategy");
       this.strategy = <Strategy>await waffle.deployContract(this.signers.admin, strategyArtifact, [
-        USDT, // token
-        aUSDT, // aToken
-        aave, // Aave pool
+        USDT,
+        aavePool,
+        aaveDataProvider,
         apwineController,
         apwineAmm,
-        apwineFuture, // Apwine future vault
+        apwineFuture,
         pairId
       ]);
     });

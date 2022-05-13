@@ -3,7 +3,8 @@ pragma solidity >=0.8.10;
 
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import { IAave } from "./interfaces/IAave.sol";
+import { IAaveLendingPool } from "./interfaces/IAaveLendingPool.sol";
+import { IAaveProtocolDataProvider } from "./interfaces/IAaveProtocolDataProvider.sol";
 import { IController } from "./interfaces/IController.sol";
 import { IAMM } from "./interfaces/IAMM.sol";
 import "hardhat/console.sol";
@@ -16,8 +17,8 @@ contract Strategy {
     error Allowance_Error();
 
     IERC20 private immutable token;
-    IERC20 private immutable aToken;
-    IAave private immutable aave;
+    IAaveLendingPool private immutable aavePool;
+    IAaveProtocolDataProvider private immutable aaveData;
     IERC1155 private ptoken;
     IERC1155 private fytoken;
     IController private immutable controller; // Apwine controller
@@ -27,8 +28,8 @@ contract Strategy {
 
    constructor(
         address _token,
-        address _aToken,
         address _aavePool,
+        address _aaveData,
         address _controller,
         address _amm,
         address _futureVault,
@@ -36,8 +37,8 @@ contract Strategy {
     ) {
         // Init vars
         token = IERC20(_token);
-        aToken = IERC20(_aToken);
-        aave = IAave(_aavePool);
+        aavePool = IAaveLendingPool(_aavePool);
+        aaveData = IAaveProtocolDataProvider(_aaveData);
         controller = IController(_controller);
         amm = IAMM(_amm);
         futureVault = _futureVault;
@@ -50,7 +51,6 @@ contract Strategy {
 
         // token transfer approves
         token.safeApprove(_aavePool, type(uint256).max); // approve aave
-        aToken.safeApprove(_controller, type(uint256).max); // approve apwine controller
     }
 
     function invest(uint256 amount) external returns(uint256) {
@@ -61,9 +61,13 @@ contract Strategy {
         token.safeTransferFrom(msg.sender, address(this), amount);
 
         // Step 2 - deposit wanted token on Aave
-        aave.deposit(address(token), amount, address(this), 0);
+        aavePool.deposit(address(token), amount, address(this), 0);
 
         // Step 3 - deposit aTokens on Apwine
+        (address aToken,,) = aaveData.getReserveTokensAddresses(address(token));
+        if(IERC20(aToken).allowance(address(this), address(controller)) == 0)
+            IERC20(aToken).safeApprove(address(controller), type(uint256).max); // approve apwine controller
+
         controller.deposit(futureVault, amount);
 
         // Step 4 - swap PTokens for the underlying wanted tokens
