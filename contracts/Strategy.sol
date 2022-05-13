@@ -2,6 +2,7 @@
 pragma solidity >=0.8.10;
 
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import { IAave } from "./interfaces/IAave.sol";
 import { IController } from "./interfaces/IController.sol";
 import { IAMM } from "./interfaces/IAMM.sol";
@@ -17,8 +18,8 @@ contract Strategy {
     IERC20 private immutable token;
     IERC20 private immutable aToken;
     IAave private immutable aave;
-    address private immutable ptoken;
-    address private immutable fytoken;
+    IERC1155 private ptoken;
+    IERC1155 private fytoken;
     IController private immutable controller; // Apwine controller
     IAMM private immutable amm; // Apwine AMM
     address private immutable futureVault;
@@ -43,14 +44,13 @@ contract Strategy {
         pairID = _pairID;
 
         // get PToken and FYToken addresses from the AMM
-        ptoken = amm.getPTAddress(); // <== Fails here
-        fytoken = amm.getFYTAddress();
+        //console.log(amm.getPTAddress());
+        //ptoken = IERC1155(amm.getPTAddress()); // <== Fails here
+        //fytoken = IERC1155(amm.getFYTAddress());
 
         // token transfer approves
         token.safeApprove(_aavePool, type(uint256).max); // approve aave
         aToken.safeApprove(_controller, type(uint256).max); // approve apwine controller
-        //ptoken.safeApprove(_amm, type(uint256).max); // approve apwine amm
-        //fytoken.safeApprove(_amm, type(uint256).max); // approve apwine amm
     }
 
     function invest(uint256 amount) external returns(uint256) {

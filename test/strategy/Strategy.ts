@@ -14,6 +14,7 @@ describe("Unit tests", function () {
 
     const signers: SignerWithAddress[] = await ethers.getSigners();
     this.signers.admin = signers[0];
+    this.signers.investor = signers[1];
   });
 
   describe("Strategy", function () {
