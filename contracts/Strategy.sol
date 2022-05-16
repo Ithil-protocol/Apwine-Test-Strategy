@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.8.10;
 
-import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import { IERC20, SafeERC20 } from "../node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC1155 } from "../node_modules/@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import { IAaveLendingPool } from "./interfaces/IAaveLendingPool.sol";
 import { IAaveProtocolDataProvider } from "./interfaces/IAaveProtocolDataProvider.sol";
 import { IController } from "./interfaces/IController.sol";
 import { IAMM } from "./interfaces/IAMM.sol";
-import "hardhat/console.sol";
+import "../node_modules/hardhat/console.sol";
 
 contract Strategy {
     using SafeERC20 for IERC20;
@@ -26,7 +26,7 @@ contract Strategy {
     address private immutable futureVault;
     uint256 private immutable pairID;
 
-   constructor(
+    constructor(
         address _token,
         address _aavePool,
         address _aaveData,
@@ -53,8 +53,10 @@ contract Strategy {
         token.safeApprove(_aavePool, type(uint256).max); // approve aave
     }
 
-    function invest(uint256 amount) external returns(uint256) {
+    function invest(uint256 amount) external returns (uint256) {
         if (token.balanceOf(msg.sender) < amount) revert Input_Balance_Error();
+        console.log(token.allowance(msg.sender, address(this)));
+
         if (token.allowance(msg.sender, address(this)) < amount) revert Allowance_Error();
 
         // Step 1 - take tokens from the user
@@ -64,14 +66,14 @@ contract Strategy {
         aavePool.deposit(address(token), amount, address(this), 0);
 
         // Step 3 - deposit aTokens on Apwine
-        (address aToken,,) = aaveData.getReserveTokensAddresses(address(token));
-        if(IERC20(aToken).allowance(address(this), address(controller)) == 0)
+        (address aToken, , ) = aaveData.getReserveTokensAddresses(address(token));
+        if (IERC20(aToken).allowance(address(this), address(controller)) == 0)
             IERC20(aToken).safeApprove(address(controller), type(uint256).max); // approve apwine controller
 
         controller.deposit(futureVault, amount);
 
         // Step 4 - swap PTokens for the underlying wanted tokens
-        uint256 ptokenBalance = 0;//ptoken.balanceOf(address(this));
+        uint256 ptokenBalance = 0; //ptoken.balanceOf(address(this));
         (uint256 amountOut, ) = amm.swapExactAmountIn(
             pairID,
             0, // TBD this should be the ptoken token ID
@@ -81,7 +83,7 @@ contract Strategy {
             address(this)
         );
 
-        if(token.balanceOf(address(this)) != amountOut) revert Output_Balance_Error();
+        if (token.balanceOf(address(this)) != amountOut) revert Output_Balance_Error();
 
         return amountOut;
     }

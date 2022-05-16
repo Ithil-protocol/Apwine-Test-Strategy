@@ -20,15 +20,17 @@ describe("Unit tests", function () {
   describe("Strategy", function () {
     beforeEach(async function () {
       const strategyArtifact: Artifact = await artifacts.readArtifact("Strategy");
-      this.strategy = <Strategy>await waffle.deployContract(this.signers.admin, strategyArtifact, [
-        USDT,
-        aavePool,
-        aaveDataProvider,
-        apwineController,
-        apwineAmm,
-        apwineFuture,
-        pairId
-      ]);
+      this.strategy = <Strategy>(
+        await waffle.deployContract(this.signers.admin, strategyArtifact, [
+          USDT,
+          aavePool,
+          aaveDataProvider,
+          apwineController,
+          apwineAmm,
+          apwineFuture,
+          pairId,
+        ])
+      );
     });
 
     shouldInvest();
