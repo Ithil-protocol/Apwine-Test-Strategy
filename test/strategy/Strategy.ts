@@ -6,7 +6,7 @@ import type { Strategy } from "../../src/types/Strategy";
 import { Signers } from "../types";
 import { shouldInvest } from "./Strategy.behavior";
 
-import { aavePool, aaveDataProvider, apwineController, apwineAmmRegistry } from "../common";
+import { aavePool, aaveDataProvider, apwineController, apwineRegistry, apwineAmmRegistry } from "../common";
 
 describe("Unit tests", function () {
   before(async function () {
@@ -24,6 +24,7 @@ describe("Unit tests", function () {
         aavePool,
         aaveDataProvider,
         apwineController,
+        apwineRegistry,
         apwineAmmRegistry
       ]);
     });

@@ -30,17 +30,15 @@ contract Strategy {
         address _aavePool,
         address _aaveData,
         address _apwineController,
+        address _apwineRegistry,
         address _apwineAMMRegistry
     ) {
         // Init vars
         aavePool = IAaveLendingPool(_aavePool);
         aaveData = IAaveProtocolDataProvider(_aaveData);
         apwineController = IApwineController(_apwineController);
+        apwineRegistry = IApwineRegistry(_apwineRegistry);
         apwineAMMRegistry = IApwineAMMRegistry(_apwineAMMRegistry);
-
-        console.log(apwineController.getRegistryAddress());
-
-        apwineRegistry = IApwineRegistry(apwineController.getRegistryAddress());
     }
 
     function invest(address tkn, uint256 amount) external returns(uint256) {
