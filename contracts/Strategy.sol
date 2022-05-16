@@ -5,8 +5,12 @@ import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
 import { IERC1155 } from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import { IAaveLendingPool } from "./interfaces/IAaveLendingPool.sol";
 import { IAaveProtocolDataProvider } from "./interfaces/IAaveProtocolDataProvider.sol";
-import { IController } from "./interfaces/IController.sol";
-import { IAMM } from "./interfaces/IAMM.sol";
+import { IApwineController } from "./interfaces/IApwineController.sol";
+import { IApwineRegistry } from "./interfaces/IApwineRegistry.sol";
+import { IApwineFutureVault } from "./interfaces/IApwineFutureVault.sol";
+import { IApwineAMM } from "./interfaces/IApwineAMM.sol";
+import { IApwineAMMRegistry } from "./interfaces/IApwineAMMRegistry.sol";
+
 import "hardhat/console.sol";
 
 contract Strategy {
@@ -16,67 +20,61 @@ contract Strategy {
     error Output_Balance_Error();
     error Allowance_Error();
 
-    IERC20 private immutable token;
     IAaveLendingPool private immutable aavePool;
     IAaveProtocolDataProvider private immutable aaveData;
-    IERC1155 private ptoken;
-    IERC1155 private fytoken;
-    IController private immutable controller; // Apwine controller
-    IAMM private immutable amm; // Apwine AMM
-    address private immutable futureVault;
-    uint256 private immutable pairID;
+    IApwineController private immutable apwineController;
+    IApwineRegistry private immutable apwineRegistry;
+    IApwineAMMRegistry private immutable apwineAMMRegistry;
 
    constructor(
-        address _token,
         address _aavePool,
         address _aaveData,
-        address _controller,
-        address _amm,
-        address _futureVault,
-        uint256 _pairID
+        address _apwineController,
+        address _apwineAMMRegistry
     ) {
         // Init vars
-        token = IERC20(_token);
         aavePool = IAaveLendingPool(_aavePool);
         aaveData = IAaveProtocolDataProvider(_aaveData);
-        controller = IController(_controller);
-        amm = IAMM(_amm);
-        futureVault = _futureVault;
-        pairID = _pairID;
+        apwineController = IApwineController(_apwineController);
+        apwineAMMRegistry = IApwineAMMRegistry(_apwineAMMRegistry);
 
-        // get PToken and FYToken addresses from the AMM
-        //console.log(amm.getPTAddress());
-        //ptoken = IERC1155(amm.getPTAddress()); // <== Fails here
-        //fytoken = IERC1155(amm.getFYTAddress());
+        console.log(apwineController.getRegistryAddress());
 
-        // token transfer approves
-        token.safeApprove(_aavePool, type(uint256).max); // approve aave
+        apwineRegistry = IApwineRegistry(apwineController.getRegistryAddress());
     }
 
-    function invest(uint256 amount) external returns(uint256) {
+    function invest(address tkn, uint256 amount) external returns(uint256) {
+        IERC20 token = IERC20(tkn);
         if (token.balanceOf(msg.sender) < amount) revert Input_Balance_Error();
         if (token.allowance(msg.sender, address(this)) < amount) revert Allowance_Error();
 
         // Step 1 - take tokens from the user
         token.safeTransferFrom(msg.sender, address(this), amount);
+        if(token.allowance(address(this), address(aavePool)) == 0)
+            token.safeApprove(address(aavePool), type(uint256).max); // approve aave
 
         // Step 2 - deposit wanted token on Aave
         aavePool.deposit(address(token), amount, address(this), 0);
 
-        // Step 3 - deposit aTokens on Apwine
-        (address aToken,,) = aaveData.getReserveTokensAddresses(address(token));
-        if(IERC20(aToken).allowance(address(this), address(controller)) == 0)
-            IERC20(aToken).safeApprove(address(controller), type(uint256).max); // approve apwine controller
+        // Step 3 - get Apwine data
+        (address futureVault, uint256 pairID) = _getFutureVault(tkn);
+        IApwineAMM amm = IApwineAMM(apwineAMMRegistry.getFutureAMMPool(futureVault));
 
-        controller.deposit(futureVault, amount);
+        // Step 4 - deposit aTokens on Apwine
+        (address aToken,,) = aaveData.getReserveTokensAddresses(tkn);
+        if(IERC20(aToken).allowance(address(this), address(apwineController)) == 0)
+            IERC20(aToken).safeApprove(address(apwineController), type(uint256).max); // approve apwine controller
+
+        apwineController.deposit(futureVault, amount);
 
         // Step 4 - swap PTokens for the underlying wanted tokens
-        uint256 ptokenBalance = 0;//ptoken.balanceOf(address(this));
+        IERC20 ptoken = IERC20(IApwineFutureVault(futureVault).getPTAddress());
+        uint256 ptokenBalance = ptoken.balanceOf(address(this));
         (uint256 amountOut, ) = amm.swapExactAmountIn(
             pairID,
-            0, // TBD this should be the ptoken token ID
+            0, // _tokenIn - this should be the ptoken
             ptokenBalance,
-            1, // TBD this should be the fytoken token ID
+            1, // _tokenOut -  this should be the underlying
             amm.getSpotPrice(pairID, 0, 1) * ptokenBalance, // TBD check math, 0 (ptoken) and 1 (fytoken) should be repaced with tokenIDs
             address(this)
         );
@@ -84,5 +82,11 @@ contract Strategy {
         if(token.balanceOf(address(this)) != amountOut) revert Output_Balance_Error();
 
         return amountOut;
+    }
+
+    function _getFutureVault(address token) internal view returns (address, uint256) {
+        for(uint256 i = 0; i < apwineRegistry.futureVaultCount(); i++) {
+            if(IApwineFutureVault(apwineRegistry.getFutureVaultAt(i)).getIBTAddress() == token) return (apwineRegistry.getFutureVaultAt(i), i);
+        }
     }
 }

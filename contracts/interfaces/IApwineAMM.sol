@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-interface IAMM {
+interface IApwineAMM {
     function swapExactAmountIn(
         uint256 _pairID,
         uint256 _tokenIn,
