@@ -103,7 +103,9 @@ contract Strategy {
         return amountOut;
     }
 
-    function getFutureVault(address token) external view returns (address, uint256) {
+    function getFutureVault(address tkn) external view returns (address, uint256) {    
+        (address token,,)= aaveData.getReserveTokensAddresses(tkn);
+   
         for(uint256 i = 0; i < apwineRegistry.futureVaultCount(); i++) {
             if(IApwineFutureVault(apwineRegistry.getFutureVaultAt(i)).getIBTAddress() == token) return (apwineRegistry.getFutureVaultAt(i), i);
         }
