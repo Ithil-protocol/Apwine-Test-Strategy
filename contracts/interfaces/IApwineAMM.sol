@@ -41,4 +41,18 @@ interface IApwineAMM {
         uint256 _tokenIn,
         uint256 _tokenOut
     ) external view returns (uint256);
+
+    /**
+     * @notice Getter for the paused state of the AMM
+     * @return true if the AMM is paused, false otherwise
+     */
+    function getAMMState() external view returns (bool);
+
+    function calcOutAndSpotGivenIn(
+        uint256 _pairID,
+        uint256 _tokenIn,
+        uint256 _tokenAmountIn,
+        uint256 _tokenOut,
+        uint256 _minAmountOut
+    ) external view returns (uint256 tokenAmountOut, uint256 spotPriceAfter);
 }

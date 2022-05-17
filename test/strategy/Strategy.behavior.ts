@@ -13,6 +13,6 @@ export function shouldInvest(): void {
     const res = await this.strategy.getFutureVault(USDT);
 
     this.token.connect(this.signers.investor).approve(this.strategy.address, ethers.constants.MaxUint256);
-    expect( await this.strategy.connect(this.signers.investor).invest(USDT, amount, res[0], res[1]) ).to.equal(amount);
+    await this.strategy.connect(this.signers.investor).invest(USDT, amount, res);
   });
 }

@@ -20,12 +20,14 @@ contract Strategy {
     error Output_Balance_Error();
     error Allowance_Error();
     error Vault_Not_Found(address token);
+    error AMM_Disabled(uint256 pairID);
 
     IAaveLendingPool private immutable aavePool;
     IAaveProtocolDataProvider private immutable aaveData;
     IApwineController private immutable apwineController;
     IApwineRegistry private immutable apwineRegistry;
     IApwineAMMRegistry private immutable apwineAMMRegistry;
+    uint256 private constant pairID = 0;
 
    constructor(
         address _aavePool,
@@ -49,14 +51,16 @@ contract Strategy {
         token.safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function _depositOnAave(IERC20 token, uint256 amount) internal returns(IERC20) {
+    function _depositOnAave(IERC20 token, uint256 amount) internal returns(IERC20, uint256) {
         if(token.allowance(address(this), address(aavePool)) == 0)
             token.safeApprove(address(aavePool), type(uint256).max);
     
         aavePool.deposit(address(token), amount, address(this), 0);
 
         (address tkn,,)= aaveData.getReserveTokensAddresses(address(token));
-        return IERC20(tkn);
+        IERC20 token = IERC20(tkn);
+
+        return (token, token.balanceOf(address(this)));
     }
 
     function _depositOnApwine(address futureVault, IERC20 aToken, uint256 amount) internal {
@@ -66,48 +70,78 @@ contract Strategy {
         apwineController.deposit(futureVault, amount);
     }
 
-    function _swapOnApwine(address futureVault, uint256 pairID) internal returns (uint256) {
+    function _swapOnApwine(address futureVault) internal returns (uint256) {
         IERC20 ptoken = IERC20(IApwineFutureVault(futureVault).getPTAddress());
         uint256 ptokenBalance = ptoken.balanceOf(address(this));
 
+        console.log("PTokenBalance", ptokenBalance);
+
         IApwineAMM amm = IApwineAMM(apwineAMMRegistry.getFutureAMMPool(futureVault));
+        if(!amm.getAMMState()) revert AMM_Disabled(pairID);
+
+        if(ptoken.allowance(address(this), address(amm)) == 0)
+            ptoken.safeApprove(address(amm), type(uint256).max); // approve apwine amm
+
+        (uint256 minOut, ) = amm.calcOutAndSpotGivenIn(
+            pairID, 
+            0, 
+            ptokenBalance,
+            1,
+            0
+        );
+
+        console.log("minOut", minOut);
+
         (uint256 amountOut, ) = amm.swapExactAmountIn(
             pairID,
             0, // _tokenIn - this should be the ptoken
             ptokenBalance,
             1, // _tokenOut -  this should be the underlying
-            amm.getSpotPrice(pairID, 0, 1) * ptokenBalance,
+            minOut,
             address(this)
         );
 
         return amountOut;
     }
 
-    function invest(address tkn, uint256 amount, address futureVault, uint256 pairID) external returns(uint256) {
+    function invest(address tkn, uint256 amount, address futureVault) external returns(uint256) {
         IERC20 token = IERC20(tkn);
+
+        console.log("amountIn", amount);
     
         // Step 1 - take tokens from the user
+        console.log("Transfering tokens");
         _transferTokens(token, amount);
+        console.log("Transfer successful");
 
         // Step 2 - deposit wanted token on Aave
-        IERC20 aToken = _depositOnAave(token, amount);
-        
+        console.log("Depositing tokens on Aave");
+        (IERC20 aToken, uint256 aTokenBalance) = _depositOnAave(token, amount);
+        console.log("aToken received", aTokenBalance);
+        console.log("Deposit on Aave successful");
+
         // Step 3 - deposit aTokens on Apwine
-        _depositOnApwine(futureVault, aToken, amount);
-        
+        console.log("Depositing tokens on Apwine");
+        _depositOnApwine(futureVault, aToken, aTokenBalance);
+        console.log("Deposit on Apwine successful");
+
         // Step 4 - swap PTokens for the underlying wanted tokens
-        uint256 amountOut = _swapOnApwine(futureVault, pairID);
+        console.log("Swapping tokens on Apwine AMM");
+        uint256 amountOut = _swapOnApwine(futureVault);
+        console.log("Swap successful");
 
         if(token.balanceOf(address(this)) != amountOut) revert Output_Balance_Error();
+
+        console.log("amountOut", amountOut);
 
         return amountOut;
     }
 
-    function getFutureVault(address tkn) external view returns (address, uint256) {    
+    function getFutureVault(address tkn) external view returns (address) {    
         (address token,,)= aaveData.getReserveTokensAddresses(tkn);
    
         for(uint256 i = 0; i < apwineRegistry.futureVaultCount(); i++) {
-            if(IApwineFutureVault(apwineRegistry.getFutureVaultAt(i)).getIBTAddress() == token) return (apwineRegistry.getFutureVaultAt(i), i);
+            if(IApwineFutureVault(apwineRegistry.getFutureVaultAt(i)).getIBTAddress() == token) return apwineRegistry.getFutureVaultAt(i);
         }
 
         revert Vault_Not_Found(token);
