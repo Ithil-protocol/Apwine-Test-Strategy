@@ -19,7 +19,7 @@ contract Strategy {
     error Input_Balance_Error();
     error Output_Balance_Error();
     error Allowance_Error();
-    error Vault_Not_Found(address token);
+    error Vault_Not_Found();
     error AMM_Disabled(uint256 pairID);
 
     IAaveLendingPool private immutable aavePool;
@@ -57,13 +57,15 @@ contract Strategy {
     
         aavePool.deposit(address(token), amount, address(this), 0);
 
-        (address tkn,,)= aaveData.getReserveTokensAddresses(address(token));
-        IERC20 token = IERC20(tkn);
+        (address aToken,,)= aaveData.getReserveTokensAddresses(address(token));
+        IERC20 tkn = IERC20(aToken);
 
-        return (token, token.balanceOf(address(this)));
+        return (tkn, tkn.balanceOf(address(this)));
     }
 
     function _depositOnApwine(address futureVault, IERC20 aToken, uint256 amount) internal {
+        if(IApwineFutureVault(futureVault).getIBTAddress() != address(aToken)) revert Vault_Not_Found();
+
         if(aToken.allowance(address(this), address(apwineController)) == 0)
             aToken.safeApprove(address(apwineController), type(uint256).max); // approve apwine controller
 
@@ -144,6 +146,6 @@ contract Strategy {
             if(IApwineFutureVault(apwineRegistry.getFutureVaultAt(i)).getIBTAddress() == token) return apwineRegistry.getFutureVaultAt(i);
         }
 
-        revert Vault_Not_Found(token);
+        revert Vault_Not_Found();
     }
 }
